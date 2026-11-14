@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ballgame">
+<meta name="theme-color" content="#05030f">
+<title>Ballgame — piłka w zakrzywionej czasoprzestrzeni</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#05030f;overflow:hidden;color:#e8ecff;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+  canvas{position:fixed;inset:0;display:block;touch-action:none}
+  .ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:14px;padding:calc(env(safe-area-inset-top) + 20px) 22px calc(env(safe-area-inset-bottom) + 20px);
+    background:radial-gradient(ellipse at center,rgba(5,3,15,.55),rgba(5,3,15,.88));text-align:center;z-index:5}
+  .hidden{display:none!important}
+  h1{margin:0 0 4px;font-size:46px;line-height:1;letter-spacing:2px;font-weight:800;
+    background:linear-gradient(90deg,#7ee8ff,#b48cff 50%,#ffb070);-webkit-background-clip:text;background-clip:text;color:transparent}
+  h2{margin:0 0 6px;font-size:34px}
+  .sub{margin:0 0 10px;opacity:.65;font-size:15px}
+  .grp{width:100%;max-width:340px;display:flex;flex-direction:column;gap:8px}
+  .lbl{font-size:12px;text-transform:uppercase;letter-spacing:2px;opacity:.55}
+  .row{display:flex;gap:8px}
+  .row>*{flex:1}
+  button{font:inherit;font-size:17px;font-weight:600;color:#e8ecff;padding:14px 10px;border-radius:14px;cursor:pointer;
+    border:1px solid rgba(150,170,255,.35);background:rgba(60,70,140,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  button:active{transform:scale(.97);background:rgba(110,120,220,.4)}
+  button.wide{width:100%;max-width:340px}
+  button.ghost{background:transparent;border-color:rgba(150,170,255,.2);font-weight:500}
+  .hint{max-width:340px;font-size:13px;opacity:.55;line-height:1.45;margin:8px 0 0}
+  .code{font-size:54px;font-weight:800;letter-spacing:10px;color:#7ee8ff;margin:4px 0}
+  input{font:inherit;font-size:30px;text-align:center;letter-spacing:8px;text-transform:uppercase;width:100%;
+    padding:10px;border-radius:14px;border:1px solid rgba(150,170,255,.4);background:rgba(20,20,50,.6);color:#fff}
+  #status{min-height:20px;font-size:14px;opacity:.75}
+  #menuBtn{position:fixed;z-index:4;top:calc(env(safe-area-inset-top) + 10px);left:10px;width:44px;height:44px;padding:0;
+    font-size:20px;border-radius:12px;background:rgba(30,30,70,.35)}
+  #toast{position:fixed;z-index:9;left:50%;bottom:calc(env(safe-area-inset-bottom) + 30px);transform:translateX(-50%);
+    background:rgba(30,30,70,.9);padding:10px 16px;border-radius:12px;font-size:14px;transition:opacity .4s;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="menu" class="ov">
+  <h1>BALLGAME</h1>
+  <p class="sub">piłka w zakrzywionej czasoprzestrzeni</p>
+  <div class="grp">
+    <div class="lbl">Gra z komputerem</div>
+    <div class="row">
+      <button data-cpu="0">Łatwy</button><button data-cpu="1">Średni</button><button data-cpu="2">Trudny</button>
+    </div>
+  </div>
+  <div class="grp">
+    <div class="lbl">Dwóch graczy</div>
+    <button id="bLocal">Na jednym telefonie</button>
+    <div class="row"><button id="bHost">Online: stwórz</button><button id="bJoin">Online: dołącz</button></div>
+  </div>
+  <p class="hint">Wgniecenia siatki przyciągają i rozpędzają piłkę, wybrzuszenia ją odpychają i hamują. Czasoprzestrzeń zmienia się po każdym punkcie. Gra do 7.</p>
+</div>
+
+<div id="online" class="ov hidden">
+  <h2 id="onTitle">Online</h2>
+  <div id="onHost" class="grp hidden">
+    <div class="lbl">Kod pokoju</div>
+    <div class="code" id="roomCode">····</div>
+    <button id="bShare">Wyślij link do gry</button>
+  </div>
+  <div id="onJoin" class="grp hidden">
+    <div class="lbl">Wpisz kod od drugiego gracza</div>
+    <input id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <button id="bConnect">Połącz</button>
+  </div>
+  <div id="status"></div>
+  <button class="ghost wide" id="bOnBack">Wróć</button>
+</div>
+
+<div id="over" class="ov hidden">
+  <h2 id="overTxt"></h2>
+  <div id="overScore" class="sub"></div>
+  <div class="grp">
+    <button id="bAgain">Jeszcze raz</button>
+    <button class="ghost" id="bOverMenu">Menu</button>
+  </div>
+</div>
+
+<button id="menuBtn" class="hidden" aria-label="Menu">☰</button>
+<div id="toast" style="opacity:0"></div>
+
+<script>
+'use strict';
+// ====== Stałe świata (jednostki logiczne, boisko 500 x 1000) ======
+const W = 500, H = 1000;
+const PAD_W = 110, PAD_H = 16, PAD_Y = 64, R = 11, WIN = 7;
+const GS = 25;            // oczko siatki
+const GRAV = 2200;        // siła "grawitacji" pola
+const WARP = 40;          // jak mocno siatka się wygina na ekranie
+const MINS = 280, MAXS = 1050, SERVE_SP = 420;
+const PEER_PREFIX = 'capri-ballgame-';
+
+const $ = id => document.getElementById(id);
+const cv = $('c'), ctx = cv.getContext('2d');
+let dpr = 1, cw = 0, ch = 0, scale = 1, offX = 0, offY = 0;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cw = innerWidth; ch = innerHeight;
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+  cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+  scale = Math.min(cw / W, ch / H);
+  offX = (cw - W * scale) / 2; offY = (ch - H * scale) / 2;
+}
+addEventListener('resize', resize); resize();
+
+// ====== Pole: czasoprzestrzeń z wgnieceniami (studnie) i wybrzuszeniami (wzgórza) ======
+function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+function genField(seed) {
+  const r = rng(seed), n = 5 + Math.floor(r() * 3), out = [];
+  let tries = 0;
+  while (out.length < n && tries++ < 400) {
+    const x = 40 + r() * (W - 80), y = 230 + r() * (H - 460);
+    if (out.some(o => Math.hypot(o.x0 - x, o.y0 - y) < 135)) continue;
+    const well = r() < 0.6;
+    const s = 55 + r() * 80;
+    out.push({
+      x0: x, y0: y, s2: s * s, cut: 18 * s * s,
+      a: well ? -(40 + r() * 55) : (30 + r() * 35),
+      ax: 10 + r() * 30, ay: 10 + r() * 30, wx: .2 + r() * .5, wy: .2 + r() * .5,
+      p: r() * 6.283, amp: .15 + r() * .25, wa: .3 + r() * .6,
+      x: x, y: y, h: 0
+    });
+  }
+  return out;
+}
+const field = { seed: 0, os: 0, cur: [], old: [], mix: 1 };
+let act = [], ft = 0;
+const smooth = m => m * m * (3 - 2 * m);
+function setField(seed) { field.seed = seed; field.cur = genField(seed); field.os = 0; field.old = []; field.mix = 1; }
+function morphField() {
+  field.old = field.cur; field.os = field.seed;
+  field.seed = 1 + (Math.random() * 2e9 | 0); field.cur = genField(field.seed); field.mix = 0;
+}
+function updateBumps(t) {
+  act = [];
+  const m = smooth(field.mix);
+  const put = (arr, w) => {
+    if (w < 0.002) return;
+    for (const b of arr) {
+      b.x = b.x0 + Math.sin(t * b.wx + b.p) * b.ax;
+      b.y = b.y0 + Math.cos(t * b.wy + b.p * 1.3) * b.ay;
+      b.h = b.a * (1 + Math.sin(t * b.wa + b.p * .7) * b.amp) * w;
+      act.push(b);
+    }
+  };
+  put(field.cur, m); put(field.old, 1 - m);
+}
+const tmp = { h: 0, gx: 0, gy: 0 };
+function hgrad(x, y, o) {
+  let h = 0, gx = 0, gy = 0;
+  for (let i = 0; i < act.length; i++) {
+    const b = act[i], dx = x - b.x, dy = y - b.y, d2 = dx * dx + dy * dy;
+    if (d2 > b.cut) continue;
+    const e = b.h * Math.exp(-d2 / (2 * b.s2));
+    h += e; gx -= e * dx / b.s2; gy -= e * dy / b.s2;
+  }
+  o.h = h; o.gx = gx; o.gy = gy; return o;
+}
+
+// ====== Stan gry ======
+const DIFF = [
+  { sp: 420, re: .20, err: 95, pred: 0 },
+  { sp: 620, re: .12, err: 85, pred: 1 },
+  { sp: 900, re: .07, err: 58, pred: 2 }
+];
+const mkPad = () => ({ x: W / 2, tx: W / 2, vx: 0, max: 2600 });
+const S = {
+  mode: 'demo', diff: 1, phase: 'serve', sc: [0, 0],
+  ball: { x: W / 2, y: H / 2, vx: 0, vy: 0 },
+  pad: [mkPad(), mkPad()], serveT: 1, serveDir: 1, rally: SERVE_SP, sinceHit: 0,
+  flip: false, trail: [], parts: [], flash: [0, 0]
+};
+const ai = [{ t: 0, target: W / 2, err: 0, was: false }, { t: 0, target: W / 2, err: 0, was: false }];
+let net = null, peer = null, conn = null, netAcc = 0;
+
+function isAI(i) { return S.mode === 'demo' || (S.mode === 'cpu' && i === 0); }
+function myPad() { return net === 'guest' ? 0 : 1; }
+
+function serve(dir) {
+  S.phase = 'serve'; S.serveT = 1.3; S.serveDir = dir;
+  const b = S.ball; b.x = W / 2; b.y = H / 2; b.vx = b.vy = 0;
+  S.rally = SERVE_SP; S.trail = []; S.sinceHit = 0;
+}
+function launch() {
+  const a = (Math.random() - .5) * .8, b = S.ball;
+  b.vx = Math.sin(a) * SERVE_SP; b.vy = S.serveDir * Math.cos(a) * SERVE_SP;
+  S.phase = 'play'; S.sinceHit = 0; sound('serve');
+}
+function startGame(mode, diff) {
+  S.mode = mode; if (diff != null) S.diff = diff;
+  S.sc = [0, 0]; S.flip = net === 'guest';
+  S.pad = [mkPad(), mkPad()];
+  morphField();
+  serve(Math.random() < .5 ? 1 : -1);
+  hide('menu'); hide('online'); hide('over'); show('menuBtn');
+}
+function toDemo() {
+  S.mode = 'demo'; S.diff = 1; S.flip = false; S.sc = [0, 0]; S.pad = [mkPad(), mkPad()];
+  serve(1); hide('over'); hide('online'); hide('menuBtn'); show('menu');
+}
+
+// ====== Fizyka ======
+function step(h) {
+  const b = S.ball;
+  hgrad(b.x, b.y, tmp);
+  b.vx -= GRAV * tmp.gx * h;
+  b.vy -= GRAV * tmp.gy * h;
+  // gdy piłka krąży za długo, czasoprzestrzeń "wypycha" ją w stronę, w którą leci
+  S.sinceHit += h;
+  if (S.sinceHit > 3.5) b.vy += (b.vy >= 0 ? 1 : -1) * (S.sinceHit - 3.5) * 700 * h;
+  let sp = Math.hypot(b.vx, b.vy);
+  if (sp > MAXS) { b.vx *= MAXS / sp; b.vy *= MAXS / sp; }
+  else if (sp < MINS) { if (sp < 1) { b.vy = MINS; sp = MINS; } b.vx *= MINS / sp; b.vy *= MINS / sp; }
+  b.x += b.vx * h; b.y += b.vy * h;
+  if (b.x < R) { b.x = R; b.vx = Math.abs(b.vx); sound('wall'); }
+  else if (b.x > W - R) { b.x = W - R; b.vx = -Math.abs(b.vx); sound('wall'); }
+  // paletki
+  const pb = S.pad[1], pt = S.pad[0];
+  const yb = H - PAD_Y, yt = PAD_Y;
+  if (b.vy > 0 && b.y + R >= yb - PAD_H / 2 && b.y - R <= yb + PAD_H / 2 && Math.abs(b.x - pb.x) <= PAD_W / 2 + R) hit(1);
+  else if (b.vy < 0 && b.y - R <= yt + PAD_H / 2 && b.y + R >= yt - PAD_H / 2 && Math.abs(b.x - pt.x) <= PAD_W / 2 + R) hit(0);
+}
+function hit(i) {
+  const b = S.ball, p = S.pad[i];
+  const off = Math.max(-1, Math.min(1, (b.x - p.x) / (PAD_W / 2 + R)));
+  const ang = off * 1.0;                      // jak w arkanoidzie: kąt zależy od miejsca uderzenia
+  S.rally = Math.min(MAXS * .85, S.rally + 20);
+  const sp = S.rally, dir = i === 1 ? -1 : 1;
+  let vx = Math.sin(ang) * sp + Math.max(-220, Math.min(220, p.vx * .12));
+  let vy = dir * Math.cos(ang) * sp;
+  const n = Math.hypot(vx, vy); vx = vx / n * sp; vy = vy / n * sp;
+  if (Math.abs(vy) < sp * .45) { vy = dir * sp * .45; vx = Math.sign(vx || 1) * Math.sqrt(sp * sp - vy * vy); }
+  b.vx = vx; b.vy = vy;
+  b.y = i === 1 ? H - PAD_Y - PAD_H / 2 - R : PAD_Y + PAD_H / 2 + R;
+  S.sinceHit = 0; S.flash[i] = 1;
+  sparks(b.x, b.y, i === 1 ? '#7ee8ff' : '#ff7ae0', 14);
+  sound('hit', sp);
+}
+function checkScore() {
+  const b = S.ball; let w = -1;
+  if (b.y > H + R * 3) w = 0; else if (b.y < -R * 3) w = 1;
+  if (w < 0) return false;
+  S.sc[w]++;
+  sound('score');
+  if (S.mode !== 'demo' && S.sc[w] >= WIN) {
+    S.phase = 'over'; b.vx = b.vy = 0; showOver();
+  } else {
+    if (S.sc[w] >= WIN) S.sc = [0, 0];
+    morphField(); serve(w === 0 ? 1 : -1);
+  }
+  return true;
+}
+
+// ====== Komputer ======
+function predict(i, mode) {
+  const b = S.ball, ty = i === 0 ? PAD_Y + PAD_H / 2 + R : H - PAD_Y - PAD_H / 2 - R;
+  if (mode === 0) return b.x;
+  if (mode === 1) {
+    const t = (ty - b.y) / b.vy; let x = b.x + b.vx * t;
+    const L = W - 2 * R; x -= R; x = ((x % (2 * L)) + 2 * L) % (2 * L); if (x > L) x = 2 * L - x; return x + R;
+  }
+  // tryb trudny: symulacja lotu po zakrzywionym polu
+  let x = b.x, y = b.y, vx = b.vx, vy = b.vy; const h = 1 / 120;
+  for (let k = 0; k < 360; k++) {
+    hgrad(x, y, tmp); vx -= GRAV * tmp.gx * h; vy -= GRAV * tmp.gy * h;
+    const sp = Math.hypot(vx, vy);
+    if (sp > MAXS) { vx *= MAXS / sp; vy *= MAXS / sp; } else if (sp < MINS && sp > 1) { vx *= MINS / sp; vy *= MINS / sp; }
+    x += vx * h; y += vy * h;
+    if (x < R) { x = R; vx = Math.abs(vx); } else if (x > W - R) { x = W - R; vx = -Math.abs(vx); }
+    if ((i === 0 && y <= ty) || (i === 1 && y >= ty)) return x;
+  }
+  return x;
+}
+function think(i, dt) {
+  const cfg = DIFF[S.mode === 'demo' ? 1 : S.diff], s = ai[i], b = S.ball, p = S.pad[i];
+  p.max = cfg.sp;
+  const towards = S.phase === 'play' && (i === 0 ? b.vy < 0 : b.vy > 0);
+  if (towards && !s.was) s.err = (Math.random() - .5) * 2 * cfg.err * Math.min(1.4, Math.hypot(b.vx, b.vy) / 650);
+  s.was = towards;
+  s.t -= dt;
+  if (s.t <= 0) {
+    s.t = cfg.re;
+    s.target = towards ? predict(i, cfg.pred) + s.err : W / 2 + (b.x - W / 2) * .3;
+  }
+  p.tx = s.target;
+}
+
+// ====== Sterowanie ======
+const keys = {};
+addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; initAudio(); });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+function s2w(cx, cy) {
+  let x = (cx - offX) / scale, y = (cy - offY) / scale;
+  if (S.flip) { x = W - x; y = H - y; }
+  return [x, y];
+}
+function handlePtr(e) {
+  if (S.mode === 'demo') return;
+  const [wx, wy] = s2w(e.clientX, e.clientY);
+  let i;
+  if (S.mode === 'local') i = wy < H / 2 ? 0 : 1; else i = myPad();
+  if (isAI(i)) return;
+  S.pad[i].tx = wx; S.pad[i].max = 2600;
+}
+const ptrs = new Set();
+cv.addEventListener('pointerdown', e => { initAudio(); ptrs.add(e.pointerId); try { cv.setPointerCapture(e.pointerId); } catch (_) {} handlePtr(e); });
+cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' || ptrs.has(e.pointerId)) handlePtr(e); });
+const ptrEnd = e => ptrs.delete(e.pointerId);
+cv.addEventListener('pointerup', ptrEnd); cv.addEventListener('pointercancel', ptrEnd);
+document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+function controls(dt) {
+  for (let i = 0; i < 2; i++) if (isAI(i)) think(i, dt);
+  const kb = (l, r, i) => {
+    if (isAI(i)) return;
+    const d = (keys[r] ? 1 : 0) - (keys[l] ? 1 : 0);
+    if (d) { const p = S.pad[i]; p.max = 900; p.tx = Math.max(PAD_W / 2, Math.min(W - PAD_W / 2, p.x + d * 900 * dt * 3)); }
+  };
+  if (S.mode === 'local') { kb('arrowleft', 'arrowright', 1); kb('a', 'd', 0); }
+  else if (S.mode !== 'demo') {
+    const i = myPad();
+    // u gościa ekran jest obrócony, więc strzałki odwracamy
+    if (S.flip) { kb('arrowright', 'arrowleft', i); kb('d', 'a', i); }
+    else { kb('arrowleft', 'arrowright', i); kb('a', 'd', i); }
+  }
+}
+function movePads(dt) {
+  for (const p of S.pad) {
+    const d = p.tx - p.x, m = p.max * dt;
+    const st = Math.max(-m, Math.min(m, d));
+    p.x = Math.max(PAD_W / 2, Math.min(W - PAD_W / 2, p.x + st));
+    p.vx = dt > 0 ? st / dt : 0;
+  }
+}
+
+// ====== Efekty ======
+function sparks(x, y, col, n) {
+  for (let k = 0; k < n; k++) {
+    const a = Math.random() * 6.283, v = 80 + Math.random() * 260;
+    S.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: .5 + Math.random() * .4, col });
+  }
+}
+let ac = null;
+function initAudio() {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
+  if (ac && ac.state === 'suspended') ac.resume();
+}
+function tone(f, d, type, v, f2) {
+  if (!ac || S.mode === 'demo') return;
+  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + .02);
+}
+function sound(k, sp) {
+  if (k === 'hit') tone(380 + (sp || 400) * .35, .09, 'square', .07);
+  else if (k === 'wall') tone(240, .06, 'triangle', .08);
+  else if (k === 'score') tone(660, .5, 'sine', .14, 110);
+  else if (k === 'serve') tone(880, .06, 'sine', .07);
+}
+
+// ====== Rysowanie ======
+let PX = new Float32Array(0), PY = PX, PHh = PX;
+const NB = 11;
+function bucketColor(k) {
+  const hn = (k - (NB - 1) / 2) / ((NB - 1) / 2);   // -1 (głęboka studnia) .. 1 (wysokie wzgórze)
+  const a = Math.abs(hn);
+  let r, g, b;
+  if (hn < 0) { r = 70 + 110 * a; g = 110 - 20 * a; b = 220 + 35 * a; }
+  else { r = 70 + 185 * a; g = 110 + 60 * a; b = 220 - 140 * a; }
+  return `rgba(${r | 0},${g | 0},${b | 0},${(.2 + .6 * a).toFixed(3)})`;
+}
+const BCOL = Array.from({ length: NB }, (_, k) => bucketColor(k));
+function drawGrid() {
+  const mx = offX / scale + GS, my = offY / scale + GS;
+  const st = GS / 2;
+  const gx0 = Math.floor(-mx / GS) * GS, gy0 = Math.floor(-my / GS) * GS;
+  const nx = Math.ceil((W + mx - gx0) / st) + 1, ny = Math.ceil((H + my - gy0) / st) + 1;
+  const N = nx * ny;
+  if (PX.length < N) { PX = new Float32Array(N); PY = new Float32Array(N); PHh = new Float32Array(N); }
+  for (let j = 0, k = 0; j < ny; j++) {
+    const y = gy0 + j * st;
+    for (let i = 0; i < nx; i++, k++) {
+      const x = gx0 + i * st;
+      hgrad(x, y, tmp);
+      PX[k] = x - WARP * tmp.gx; PY[k] = y - WARP * tmp.gy; PHh[k] = tmp.h;
+    }
+  }
+  const paths = Array.from({ length: NB }, () => new Path2D());
+  const bk = h => { let v = Math.round((h / 90 + 1) * (NB - 1) / 2); return v < 0 ? 0 : v >= NB ? NB - 1 : v; };
+  const seg = (a, b) => { const p = paths[bk((PHh[a] + PHh[b]) / 2)]; p.moveTo(PX[a], PY[a]); p.lineTo(PX[b], PY[b]); };
+  const i0 = ((Math.round(gx0 / st) % 2) + 2) % 2, j0 = ((Math.round(gy0 / st) % 2) + 2) % 2;
+  for (let j = j0; j < ny; j += 2) for (let i = 0; i < nx - 1; i++) seg(j * nx + i, j * nx + i + 1);
+  for (let i = i0; i < nx; i += 2) for (let j = 0; j < ny - 1; j++) seg(j * nx + i, (j + 1) * nx + i);
+  ctx.lineWidth = 1.1 / scale;
+  for (let k = 0; k < NB; k++) { ctx.strokeStyle = BCOL[k]; ctx.stroke(paths[k]); }
+}
+function drawGlows() {
+  for (const b of act) {
+    hgrad(b.x, b.y, tmp);
+    const cx = b.x - WARP * tmp.gx, cy = b.y - WARP * tmp.gy, k = Math.min(1, Math.abs(b.h) / 90);
+    const rad = Math.sqrt(b.s2) * 1.5;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    if (b.h < 0) {
+      g.addColorStop(0, `rgba(0,0,0,${.85 * k})`);
+      g.addColorStop(.35, `rgba(25,8,60,${.6 * k})`);
+      g.addColorStop(.65, `rgba(120,70,255,${.16 * k})`);
+      g.addColorStop(1, 'rgba(120,70,255,0)');
+    } else {
+      g.addColorStop(0, `rgba(255,170,90,${.34 * k})`);
+      g.addColorStop(.6, `rgba(255,120,60,${.12 * k})`);
+      g.addColorStop(1, 'rgba(255,120,60,0)');
+    }
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, 6.283); ctx.fill();
+  }
+}
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function drawArena() {
+  const zt = ctx.createLinearGradient(0, 0, 0, 140);
+  zt.addColorStop(0, 'rgba(255,90,220,.14)'); zt.addColorStop(1, 'rgba(255,90,220,0)');
+  ctx.fillStyle = zt; ctx.fillRect(0, 0, W, 140);
+  const zb = ctx.createLinearGradient(0, H, 0, H - 140);
+  zb.addColorStop(0, 'rgba(90,220,255,.14)'); zb.addColorStop(1, 'rgba(90,220,255,0)');
+  ctx.fillStyle = zb; ctx.fillRect(0, H - 140, W, 140);
+  ctx.strokeStyle = 'rgba(140,170,255,.55)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, H); ctx.moveTo(W, 0); ctx.lineTo(W, H); ctx.stroke();
+  ctx.setLineDash([10, 12]); ctx.strokeStyle = 'rgba(200,210,255,.18)';
+  ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke(); ctx.setLineDash([]);
+}
+function drawPads() {
+  const cols = ['#ff7ae0', '#7ee8ff'];
+  for (let i = 0; i < 2; i++) {
+    const p = S.pad[i], y = i === 0 ? PAD_Y : H - PAD_Y, f = S.flash[i];
+    ctx.save();
+    ctx.shadowColor = cols[i]; ctx.shadowBlur = 18 + 20 * f;
+    ctx.fillStyle = cols[i];
+    rr(p.x - PAD_W / 2, y - PAD_H / 2, PAD_W, PAD_H, PAD_H / 2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = `rgba(255,255,255,${.35 + .5 * f})`;
+    rr(p.x - PAD_W / 2 + 6, y - 2, PAD_W - 12, 4, 2); ctx.fill();
+    ctx.restore();
+  }
+}
+function drawBall() {
+  const b = S.ball;
+  // smuga
+  const tr = S.trail;
+  for (let k = 1; k < tr.length; k++) {
+    const a = k / tr.length;
+    ctx.strokeStyle = `rgba(200,230,255,${a * .5})`; ctx.lineWidth = R * 1.6 * a;
+    ctx.beginPath(); ctx.moveTo(tr[k - 1][0], tr[k - 1][1]); ctx.lineTo(tr[k][0], tr[k][1]); ctx.stroke();
+  }
+  hgrad(b.x, b.y, tmp);
+  const r = R * Math.max(.6, 1 + tmp.h / 250);   // na wzgórzu piłka "bliżej", w studni "głębiej"
+  const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r * 3.2);
+  g.addColorStop(0, 'rgba(255,255,255,.55)'); g.addColorStop(1, 'rgba(160,200,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, r * 3.2, 0, 6.283); ctx.fill();
+  const g2 = ctx.createRadialGradient(b.x - r * .35, b.y - r * .35, r * .1, b.x, b.y, r);
+  g2.addColorStop(0, '#ffffff'); g2.addColorStop(1, '#a9c4ff');
+  ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 6.283); ctx.fill();
+  if (S.phase === 'serve') {
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(b.x, b.y, R + S.serveT * 45, 0, 6.283); ctx.stroke();
+    const d = S.serveDir;   // strzałka: do kogo leci serw
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath();
+    ctx.moveTo(b.x, b.y + d * 40); ctx.lineTo(b.x - 9, b.y + d * 26); ctx.lineTo(b.x + 9, b.y + d * 26); ctx.fill();
+  }
+}
+function drawParts() {
+  for (const p of S.parts) { ctx.globalAlpha = Math.max(0, p.l * 1.6); ctx.fillStyle = p.col; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+  ctx.globalAlpha = 1;
+}
+function drawHUD() {
+  if (S.mode === 'demo') return;
+  const topI = S.flip ? 1 : 0, botI = 1 - topI;
+  const names = S.mode === 'cpu' ? ['KOMPUTER', 'TY'] : S.mode === 'local' ? ['GRACZ 2', 'GRACZ 1']
+    : (net === 'guest' ? ['TY', 'RYWAL'] : ['RYWAL', 'TY']);
+  const x = offX + W * scale - 16 * scale, cy = offY + H * scale / 2;
+  const fs = Math.max(28, 72 * scale);
+  ctx.textAlign = 'right';
+  const draw = (i, y, base, rot) => {
+    ctx.save();
+    // w trybie na jednym telefonie wynik gracza z góry jest obrócony do niego
+    if (rot) { ctx.translate(offX + 16 * scale, y); ctx.rotate(Math.PI); } else ctx.translate(x, y);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = base;
+    ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.font = `800 ${fs}px -apple-system,Segoe UI,Roboto,sans-serif`;
+    ctx.fillText(String(S.sc[i]), 0, 0);
+    ctx.font = `600 ${Math.max(10, 13 * scale)}px -apple-system,Segoe UI,Roboto,sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    ctx.fillText(names[i], 0, base === 'bottom' ? -fs * .95 : fs * .95);
+    ctx.restore();
+  };
+  const localRot = S.mode === 'local';
+  draw(topI, cy - 14 * scale, localRot ? 'top' : 'bottom', localRot);
+  draw(botI, cy + 14 * scale, 'top', false);
+}
+function render() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#05030f'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offX, dpr * offY);
+  if (S.flip) { ctx.translate(W, H); ctx.rotate(Math.PI); }
+  drawGlows(); drawGrid(); drawArena(); drawParts(); drawBall(); drawPads();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawHUD();
+}
+
+// ====== Pętla ======
+let last = performance.now();
+function frame(now) {
+  let dt = (now - last) / 1000; last = now;
+  if (dt > .05) dt = .05;
+  update(dt); render();
+  requestAnimationFrame(frame);
+}
+function update(dt) {
+  ft += dt;
+  if (field.mix < 1) field.mix = Math.min(1, field.mix + dt / 1.4);
+  updateBumps(ft);
+  controls(dt); movePads(dt);
+  const b = S.ball;
+  if (S.phase === 'serve') {
+    b.x = W / 2; b.y = H / 2;
+    if (net !== 'guest') { S.serveT -= dt; if (S.serveT <= 0) launch(); }
+  } else if (S.phase === 'play') {
+    const n = Math.max(1, Math.ceil(dt * 240)), h = dt / n;
+    for (let k = 0; k < n; k++) { step(h); if (net !== 'guest' && checkScore()) break; }
+  }
+  if (S.phase === 'play') { S.trail.push([b.x, b.y]); if (S.trail.length > 18) S.trail.shift(); }
+  for (const p of S.parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .96; p.vy *= .96; p.l -= dt; }
+  S.parts = S.parts.filter(p => p.l > 0);
+  S.flash[0] = Math.max(0, S.flash[0] - dt * 3); S.flash[1] = Math.max(0, S.flash[1] - dt * 3);
+  if (net && conn && conn.open) {
+    netAcc += dt;
+    if (netAcc >= 1 / 30) { netAcc = 0; net === 'host' ? sendState() : conn.send({ t: 'p', x: Math.round(S.pad[0].tx) }); }
+  }
+}
+
+// ====== Online (PeerJS, połączenie bezpośrednie między telefonami) ======
+function loadPeer() {
+  return new Promise((res, rej) => {
+    if (window.Peer) return res();
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload = res; s.onerror = () => rej(new Error('Nie udało się wczytać PeerJS'));
+    document.head.appendChild(s);
+  });
+}
+const r1 = v => Math.round(v * 10) / 10;
+function sendState() {
+  const b = S.ball;
+  conn.send({ t: 's', b: [r1(b.x), r1(b.y), r1(b.vx), r1(b.vy)], p: [r1(S.pad[0].x), r1(S.pad[1].x)],
+    sc: S.sc, ph: S.phase, st: r1(S.serveT), sd: S.serveDir, ft: Math.round(ft * 1000) / 1000,
+    seed: field.seed, os: field.os, mix: Math.round(field.mix * 1000) / 1000 });
+}
+function onGuestState(m) {
+  if (S.mode !== 'online') { S.mode = 'online'; S.flip = true; S.pad = [mkPad(), mkPad()];
+    hide('menu'); hide('online'); hide('over'); show('menuBtn'); }
+  if (m.seed !== field.seed) {
+    field.seed = m.seed; field.cur = genField(m.seed);
+    field.os = m.os; field.old = m.os ? genField(m.os) : [];
+  }
+  field.mix = m.mix; ft = m.ft;
+  const b = S.ball; b.x = m.b[0]; b.y = m.b[1]; b.vx = m.b[2]; b.vy = m.b[3];
+  S.pad[1].tx = m.p[1]; S.pad[1].max = 5000;
+  if (m.sc[0] !== S.sc[0] || m.sc[1] !== S.sc[1]) { sound('score'); S.trail = []; }
+  S.sc = m.sc.slice(); S.serveT = m.st; S.serveDir = m.sd;
+  const prev = S.phase; S.phase = m.ph;
+  if (prev === 'serve' && m.ph === 'play') sound('serve');
+  if (m.ph === 'over' && prev !== 'over') showOver();
+  if (m.ph !== 'over' && prev === 'over') hide('over');
+}
+function wireConn() {
+  conn.on('data', m => {
+    if (!m || !m.t) return;
+    if (net === 'guest' && m.t === 's') onGuestState(m);
+    else if (net === 'host' && m.t === 'p') { S.pad[0].tx = m.x; S.pad[0].max = 2600; }
+    else if (net === 'host' && m.t === 'r' && S.phase === 'over') startGame('online');
+  });
+  conn.on('close', () => { if (net) { toast('Drugi gracz się rozłączył'); leaveOnline(); } });
+  conn.on('error', () => {});
+}
+function randCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 4; i++) s += A[Math.random() * A.length | 0]; return s; }
+let roomCode = '';
+async function hostRoom() {
+  showOnline('host'); status('Łączenie z serwerem…');
+  try { await loadPeer(); } catch (e) { status(e.message); return; }
+  const tryOpen = () => {
+    roomCode = randCode(); $('roomCode').textContent = roomCode;
+    peer = new Peer(PEER_PREFIX + roomCode);
+    peer.on('open', () => status('Czekam na drugiego gracza…'));
+    peer.on('connection', c => {
+      if (conn) { c.close(); return; }
+      conn = c; net = 'host'; wireConn();
+      c.on('open', () => { status(''); startGame('online'); });
+    });
+    peer.on('error', e => {
+      if (e.type === 'unavailable-id') { peer.destroy(); tryOpen(); }
+      else status('Błąd: ' + (e.type || e.message));
+    });
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch (_) {} });
+  };
+  tryOpen();
+}
+async function joinRoom(code) {
+  code = (code || '').trim().toUpperCase();
+  if (code.length !== 4) { status('Kod ma 4 znaki'); return; }
+  status('Łączenie…');
+  try { await loadPeer(); } catch (e) { status(e.message); return; }
+  if (peer) { try { peer.destroy(); } catch (_) {} }
+  peer = new Peer();
+  peer.on('open', () => {
+    conn = peer.connect(PEER_PREFIX + code, { serialization: 'json' });
+    net = 'guest'; wireConn();
+    conn.on('open', () => status('Połączono! Start…'));
+    setTimeout(() => { if (conn && !conn.open && net === 'guest') status('Nie mogę się połączyć — sprawdź kod'); }, 8000);
+  });
+  peer.on('error', e => status(e.type === 'peer-unavailable' ? 'Nie ma pokoju o tym kodzie' : 'Błąd: ' + (e.type || e.message)));
+}
+function leaveOnline() {
+  const p = peer; net = null; conn = null; peer = null;
+  if (p) { try { p.destroy(); } catch (_) {} }
+  toDemo();
+}
+
+// ====== UI ======
+function show(id) { $(id).classList.remove('hidden'); }
+function hide(id) { $(id).classList.add('hidden'); }
+function status(t) { $('status').textContent = t; }
+let toastT = 0;
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = 0, 2500); }
+function showOnline(kind) {
+  hide('menu'); show('online'); status('');
+  $('onTitle').textContent = kind === 'host' ? 'Twój pokój' : 'Dołącz do gry';
+  kind === 'host' ? (show('onHost'), hide('onJoin')) : (show('onJoin'), hide('onHost'));
+}
+function showOver() {
+  const w = S.sc[0] >= WIN ? 0 : 1;
+  let t;
+  if (S.mode === 'cpu') t = w === 1 ? 'Wygrałeś! 🎉' : 'Komputer wygrywa';
+  else if (S.mode === 'local') t = `Wygrywa Gracz ${w === 1 ? 1 : 2}`;
+  else t = w === myPad() ? 'Wygrałeś! 🎉' : 'Rywal wygrywa';
+  $('overTxt').textContent = t;
+  const me = myPad();
+  $('overScore').textContent = S.mode === 'local' ? `${S.sc[1]} : ${S.sc[0]}` : `${S.sc[me]} : ${S.sc[1 - me]}`;
+  $('bAgain').textContent = 'Jeszcze raz';
+  show('over');
+}
+document.querySelectorAll('[data-cpu]').forEach(b => b.onclick = () => { initAudio(); startGame('cpu', +b.dataset.cpu); });
+$('bLocal').onclick = () => { initAudio(); startGame('local'); };
+$('bHost').onclick = () => { initAudio(); hostRoom(); };
+$('bJoin').onclick = () => { initAudio(); showOnline('join'); setTimeout(() => $('codeIn').focus(), 50); };
+$('bConnect').onclick = () => { initAudio(); joinRoom($('codeIn').value); };
+$('codeIn').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom($('codeIn').value); });
+$('bOnBack').onclick = () => { leaveOnline(); };
+$('bShare').onclick = async () => {
+  const url = location.origin + location.pathname + '?room=' + roomCode;
+  try {
+    if (navigator.share) await navigator.share({ title: 'Ballgame', text: 'Zagraj ze mną! Kod: ' + roomCode, url });
+    else { await navigator.clipboard.writeText(url); toast('Link skopiowany'); }
+  } catch (_) {}
+};
+$('bAgain').onclick = () => {
+  initAudio();
+  if (S.mode === 'online') {
+    if (net === 'guest') { conn && conn.open && conn.send({ t: 'r' }); $('bAgain').textContent = 'Czekam na rywala…'; }
+    else startGame('online');
+  } else startGame(S.mode);
+};
+$('bOverMenu').onclick = () => { net ? leaveOnline() : toDemo(); };
+$('menuBtn').onclick = () => { net ? leaveOnline() : toDemo(); };
+
+// start: tryb demo (komputer gra sam ze sobą w tle menu)
+setField(1 + (Math.random() * 2e9 | 0));
+serve(1);
+const qRoom = new URLSearchParams(location.search).get('room');
+if (qRoom) { showOnline('join'); $('codeIn').value = qRoom.toUpperCase(); joinRoom(qRoom); }
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
