@@ -6,9 +6,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Ballgame">
+<meta name="apple-mobile-web-app-title" content="Gravity Ball">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#05030f">
-<title>Ballgame — piłka w zakrzywionej czasoprzestrzeni</title>
+<title>Gravity Ball</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:#05030f;overflow:hidden;color:#e8ecff;
@@ -19,7 +22,7 @@
     gap:14px;padding:calc(env(safe-area-inset-top) + 20px) 22px calc(env(safe-area-inset-bottom) + 20px);
     background:radial-gradient(ellipse at center,rgba(5,3,15,.55),rgba(5,3,15,.88));text-align:center;z-index:5}
   .hidden{display:none!important}
-  h1{margin:0 0 4px;font-size:46px;line-height:1;letter-spacing:2px;font-weight:800;
+  h1{margin:0 0 4px;font-size:40px;line-height:1;letter-spacing:2px;font-weight:800;
     background:linear-gradient(90deg,#7ee8ff,#b48cff 50%,#ffb070);-webkit-background-clip:text;background-clip:text;color:transparent}
   h2{margin:0 0 6px;font-size:34px}
   .sub{margin:0 0 10px;opacity:.65;font-size:15px}
@@ -37,8 +40,7 @@
   input{font:inherit;font-size:30px;text-align:center;letter-spacing:8px;text-transform:uppercase;width:100%;
     padding:10px;border-radius:14px;border:1px solid rgba(150,170,255,.4);background:rgba(20,20,50,.6);color:#fff}
   #status{min-height:20px;font-size:14px;opacity:.75}
-  #menuBtn{position:fixed;z-index:4;top:calc(env(safe-area-inset-top) + 10px);left:10px;width:44px;height:44px;padding:0;
-    font-size:20px;border-radius:12px;background:rgba(30,30,70,.35)}
+  .logo{width:96px;height:96px;border-radius:22px;box-shadow:0 0 40px rgba(140,90,255,.45)}
   #toast{position:fixed;z-index:9;left:50%;bottom:calc(env(safe-area-inset-bottom) + 30px);transform:translateX(-50%);
     background:rgba(30,30,70,.9);padding:10px 16px;border-radius:12px;font-size:14px;transition:opacity .4s;pointer-events:none}
 </style>
@@ -47,7 +49,8 @@
 <canvas id="c"></canvas>
 
 <div id="menu" class="ov">
-  <h1>BALLGAME</h1>
+  <img class="logo" src="icon-192.png" alt="">
+  <h1>GRAVITY BALL</h1>
   <p class="sub">piłka w zakrzywionej czasoprzestrzeni</p>
   <div class="grp">
     <div class="lbl">Gra z komputerem</div>
@@ -60,7 +63,7 @@
     <button id="bLocal">Na jednym telefonie</button>
     <div class="row"><button id="bHost">Online: stwórz</button><button id="bJoin">Online: dołącz</button></div>
   </div>
-  <p class="hint">Wgniecenia siatki przyciągają i rozpędzają piłkę, wybrzuszenia ją odpychają i hamują. Czasoprzestrzeń zmienia się po każdym punkcie. Gra do 7.</p>
+  <p class="hint">Wgniecenia siatki przyciągają i rozpędzają piłkę, wybrzuszenia ją odpychają i hamują. Szybki ruch palcem w stronę piłki to mocne odbicie, a piłka przyspiesza. Stuknij w środek ekranu, żeby zatrzymać grę. Gra do 7.</p>
 </div>
 
 <div id="online" class="ov hidden">
@@ -88,7 +91,14 @@
   </div>
 </div>
 
-<button id="menuBtn" class="hidden" aria-label="Menu">☰</button>
+<div id="pause" class="ov hidden">
+  <h2>Pauza</h2>
+  <div id="pauseScore" class="sub"></div>
+  <div class="grp">
+    <button id="bResume">Graj dalej</button>
+    <button class="ghost" id="bPauseMenu">Wyjdź do menu</button>
+  </div>
+</div>
 <div id="toast" style="opacity:0"></div>
 
 <script>
@@ -99,8 +109,9 @@ const PAD_W = 110, PAD_H = 16, PAD_Y = 64, R = 11, WIN = 7;
 const GS = 25;            // oczko siatki
 const GRAV = 2200;        // siła "grawitacji" pola
 const WARP = 40;          // jak mocno siatka się wygina na ekranie
-const MINS = 280, MAXS = 1050, SERVE_SP = 420;
-const PEER_PREFIX = 'capri-ballgame-';
+const MINS = 280, MAXS = 1300, RALLY_MAX = 900, SERVE_SP = 420;
+const LUNGE = 30, SMASH_T = .24;   // wysunięcie paletki przy mocnym odbiciu
+const PEER_PREFIX = 'capri-gravityball-';
 
 const $ = id => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
@@ -173,18 +184,19 @@ function hgrad(x, y, o) {
 
 // ====== Stan gry ======
 const DIFF = [
-  { sp: 420, re: .20, err: 95, pred: 0 },
-  { sp: 620, re: .12, err: 85, pred: 1 },
-  { sp: 900, re: .07, err: 58, pred: 2 }
+  { sp: 420, re: .20, err: 95, pred: 0, sm: 0 },
+  { sp: 620, re: .12, err: 85, pred: 1, sm: .15 },
+  { sp: 900, re: .07, err: 58, pred: 2, sm: .3 }
 ];
-const mkPad = () => ({ x: W / 2, tx: W / 2, vx: 0, max: 2600 });
+const mkPad = () => ({ x: W / 2, tx: W / 2, vx: 0, max: 2600, off: 0, sm: 0, cd: 0 });
+const padY = i => i === 0 ? PAD_Y + S.pad[0].off : H - PAD_Y - S.pad[1].off;
 const S = {
   mode: 'demo', diff: 1, phase: 'serve', sc: [0, 0],
   ball: { x: W / 2, y: H / 2, vx: 0, vy: 0 },
   pad: [mkPad(), mkPad()], serveT: 1, serveDir: 1, rally: SERVE_SP, sinceHit: 0,
-  flip: false, trail: [], parts: [], flash: [0, 0]
+  flip: false, paused: false, trail: [], parts: [], flash: [0, 0]
 };
-const ai = [{ t: 0, target: W / 2, err: 0, was: false }, { t: 0, target: W / 2, err: 0, was: false }];
+const ai = [{ t: 0, target: W / 2, err: 0, was: false, sm: false }, { t: 0, target: W / 2, err: 0, was: false, sm: false }];
 let net = null, peer = null, conn = null, netAcc = 0;
 
 function isAI(i) { return S.mode === 'demo' || (S.mode === 'cpu' && i === 0); }
@@ -206,11 +218,13 @@ function startGame(mode, diff) {
   S.pad = [mkPad(), mkPad()];
   morphField();
   serve(Math.random() < .5 ? 1 : -1);
-  hide('menu'); hide('online'); hide('over'); show('menuBtn');
+  S.paused = false; hide('pause');
+  hide('menu'); hide('online'); hide('over');
 }
 function toDemo() {
   S.mode = 'demo'; S.diff = 1; S.flip = false; S.sc = [0, 0]; S.pad = [mkPad(), mkPad()];
-  serve(1); hide('over'); hide('online'); hide('menuBtn'); show('menu');
+  S.paused = false; hide('pause');
+  serve(1); hide('over'); hide('online'); show('menu');
 }
 
 // ====== Fizyka ======
@@ -230,7 +244,7 @@ function step(h) {
   else if (b.x > W - R) { b.x = W - R; b.vx = -Math.abs(b.vx); sound('wall'); }
   // paletki
   const pb = S.pad[1], pt = S.pad[0];
-  const yb = H - PAD_Y, yt = PAD_Y;
+  const yb = padY(1), yt = padY(0);
   if (b.vy > 0 && b.y + R >= yb - PAD_H / 2 && b.y - R <= yb + PAD_H / 2 && Math.abs(b.x - pb.x) <= PAD_W / 2 + R) hit(1);
   else if (b.vy < 0 && b.y - R <= yt + PAD_H / 2 && b.y + R >= yt - PAD_H / 2 && Math.abs(b.x - pt.x) <= PAD_W / 2 + R) hit(0);
 }
@@ -238,17 +252,20 @@ function hit(i) {
   const b = S.ball, p = S.pad[i];
   const off = Math.max(-1, Math.min(1, (b.x - p.x) / (PAD_W / 2 + R)));
   const ang = off * 1.0;                      // jak w arkanoidzie: kąt zależy od miejsca uderzenia
-  S.rally = Math.min(MAXS * .85, S.rally + 20);
-  const sp = S.rally, dir = i === 1 ? -1 : 1;
+  const smashed = p.sm > 0;
+  S.rally = Math.min(RALLY_MAX, S.rally + (smashed ? 45 : 20));
+  // mocne odbicie: piłka dostaje dodatkowego kopa ponad normalną prędkość wymiany
+  const sp = smashed ? Math.min(MAXS, Math.max(S.rally, Math.hypot(b.vx, b.vy)) * 1.35) : S.rally;
+  const dir = i === 1 ? -1 : 1;
   let vx = Math.sin(ang) * sp + Math.max(-220, Math.min(220, p.vx * .12));
   let vy = dir * Math.cos(ang) * sp;
   const n = Math.hypot(vx, vy); vx = vx / n * sp; vy = vy / n * sp;
   if (Math.abs(vy) < sp * .45) { vy = dir * sp * .45; vx = Math.sign(vx || 1) * Math.sqrt(sp * sp - vy * vy); }
   b.vx = vx; b.vy = vy;
-  b.y = i === 1 ? H - PAD_Y - PAD_H / 2 - R : PAD_Y + PAD_H / 2 + R;
+  b.y = i === 1 ? padY(1) - PAD_H / 2 - R : padY(0) + PAD_H / 2 + R;
   S.sinceHit = 0; S.flash[i] = 1;
-  sparks(b.x, b.y, i === 1 ? '#7ee8ff' : '#ff7ae0', 14);
-  sound('hit', sp);
+  if (smashed) { p.sm = Math.min(p.sm, .1); sparks(b.x, b.y, '#ffffff', 28); sound('smash'); }
+  else { sparks(b.x, b.y, i === 1 ? '#7ee8ff' : '#ff7ae0', 14); sound('hit', sp); }
 }
 function checkScore() {
   const b = S.ball; let w = -1;
@@ -285,12 +302,21 @@ function predict(i, mode) {
   }
   return x;
 }
+function smash(i) {
+  const p = S.pad[i];
+  if (p.cd > 0 || S.paused) return;
+  p.sm = SMASH_T; p.cd = .4;
+  sound('whoosh');
+  if (net === 'guest' && i === 0 && conn && conn.open) conn.send({ t: 'k' });
+}
 function think(i, dt) {
   const cfg = DIFF[S.mode === 'demo' ? 1 : S.diff], s = ai[i], b = S.ball, p = S.pad[i];
   p.max = cfg.sp;
   const towards = S.phase === 'play' && (i === 0 ? b.vy < 0 : b.vy > 0);
+  if (towards && !s.was) s.sm = Math.random() < (S.mode === 'demo' ? .2 : cfg.sm);
   if (towards && !s.was) s.err = (Math.random() - .5) * 2 * cfg.err * Math.min(1.4, Math.hypot(b.vx, b.vy) / 650);
   s.was = towards;
+  if (towards && s.sm && Math.abs(b.y - padY(i)) < 55 && Math.abs(b.x - p.x) < PAD_W / 2 + 20) { s.sm = false; smash(i); }
   s.t -= dt;
   if (s.t <= 0) {
     s.t = cfg.re;
@@ -301,24 +327,53 @@ function think(i, dt) {
 
 // ====== Sterowanie ======
 const keys = {};
-addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; initAudio(); });
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase(); initAudio();
+  if (!e.repeat && S.mode !== 'demo') {
+    if (k === 'escape' || k === ' ' || k === 'p') { if (S.phase !== 'over') setPause(!S.paused); e.preventDefault(); return; }
+    if (k === 'arrowup' && !isAI(myPad())) smash(S.mode === 'local' ? 1 : myPad());
+    if (k === 'w') { const i = S.mode === 'local' ? 0 : myPad(); if (!isAI(i)) smash(i); }
+  }
+  keys[k] = true;
+});
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 function s2w(cx, cy) {
   let x = (cx - offX) / scale, y = (cy - offY) / scale;
   if (S.flip) { x = W - x; y = H - y; }
   return [x, y];
 }
+const ptrs = new Map();   // pointerId -> ostatnia pozycja (do wykrywania szybkiego ruchu w stronę piłki)
 function handlePtr(e) {
-  if (S.mode === 'demo') return;
+  if (S.mode === 'demo' || S.paused) return;
   const [wx, wy] = s2w(e.clientX, e.clientY);
-  let i;
-  if (S.mode === 'local') i = wy < H / 2 ? 0 : 1; else i = myPad();
+  let rec = ptrs.get(e.pointerId);
+  let i = rec ? rec.i : (S.mode === 'local' ? (wy < H / 2 ? 0 : 1) : myPad());
   if (isAI(i)) return;
   S.pad[i].tx = wx; S.pad[i].max = 2600;
+  const t = e.timeStamp || performance.now();
+  if (!rec) { rec = { i, y: wy, t, acc: 0 }; ptrs.set(e.pointerId, rec); return; }
+  // ruch prostopadły (w stronę rywala) = mocne odbicie
+  const dy = (i === 1 ? rec.y - wy : wy - rec.y), dtm = Math.max(1, t - rec.t);
+  rec.acc = dy > 0 ? rec.acc + dy : 0;
+  if (dy > 0 && dy / dtm * 1000 > 900 && rec.acc > 18) { smash(i); rec.acc = -1e9; }
+  if (dy < 0) rec.acc = 0;
+  rec.y = wy; rec.t = t;
 }
-const ptrs = new Set();
-cv.addEventListener('pointerdown', e => { initAudio(); ptrs.add(e.pointerId); try { cv.setPointerCapture(e.pointerId); } catch (_) {} handlePtr(e); });
-cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' || ptrs.has(e.pointerId)) handlePtr(e); });
+function isCenterTap(e) {
+  if (S.mode === 'demo' || S.phase === 'over') return false;
+  const [wx, wy] = s2w(e.clientX, e.clientY);
+  return Math.hypot(wx - W / 2, wy - H / 2) < 70;
+}
+cv.addEventListener('pointerdown', e => {
+  initAudio();
+  if (isCenterTap(e)) { setPause(!S.paused); return; }
+  if (S.mode !== 'demo') { ptrs.delete(e.pointerId); handlePtr(e); }
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+});
+cv.addEventListener('pointermove', e => {
+  if (ptrs.has(e.pointerId)) handlePtr(e);
+  else if (e.pointerType === 'mouse' && S.mode !== 'demo' && !S.paused) handlePtr(e);
+});
 const ptrEnd = e => ptrs.delete(e.pointerId);
 cv.addEventListener('pointerup', ptrEnd); cv.addEventListener('pointercancel', ptrEnd);
 document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
@@ -345,6 +400,12 @@ function movePads(dt) {
     const st = Math.max(-m, Math.min(m, d));
     p.x = Math.max(PAD_W / 2, Math.min(W - PAD_W / 2, p.x + st));
     p.vx = dt > 0 ? st / dt : 0;
+    p.cd = Math.max(0, p.cd - dt);
+    if (p.sm > 0) {
+      p.sm = Math.max(0, p.sm - dt);
+      const el = SMASH_T - p.sm;
+      p.off = el < .06 ? LUNGE * el / .06 : LUNGE * Math.max(0, p.sm) / (SMASH_T - .06);
+    } else p.off = 0;
   }
 }
 
@@ -373,6 +434,8 @@ function sound(k, sp) {
   else if (k === 'wall') tone(240, .06, 'triangle', .08);
   else if (k === 'score') tone(660, .5, 'sine', .14, 110);
   else if (k === 'serve') tone(880, .06, 'sine', .07);
+  else if (k === 'whoosh') tone(200, .12, 'sawtooth', .03, 520);
+  else if (k === 'smash') { tone(160, .18, 'square', .1, 60); tone(1200, .12, 'sine', .08, 600); }
 }
 
 // ====== Rysowanie ======
@@ -443,14 +506,19 @@ function drawArena() {
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, H); ctx.moveTo(W, 0); ctx.lineTo(W, H); ctx.stroke();
   ctx.setLineDash([10, 12]); ctx.strokeStyle = 'rgba(200,210,255,.18)';
   ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke(); ctx.setLineDash([]);
+  if (S.mode !== 'demo') {   // środek = przycisk pauzy
+    ctx.strokeStyle = 'rgba(200,210,255,.16)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, 34, 0, 6.283); ctx.stroke();
+    if (S.phase === 'play') { ctx.fillStyle = 'rgba(200,210,255,.14)'; ctx.fillRect(W / 2 - 8, H / 2 - 9, 5, 18); ctx.fillRect(W / 2 + 3, H / 2 - 9, 5, 18); }
+  }
 }
 function drawPads() {
   const cols = ['#ff7ae0', '#7ee8ff'];
   for (let i = 0; i < 2; i++) {
-    const p = S.pad[i], y = i === 0 ? PAD_Y : H - PAD_Y, f = S.flash[i];
+    const p = S.pad[i], y = padY(i), f = S.flash[i], sm = p.sm > 0;
     ctx.save();
-    ctx.shadowColor = cols[i]; ctx.shadowBlur = 18 + 20 * f;
-    ctx.fillStyle = cols[i];
+    ctx.shadowColor = sm ? '#ffffff' : cols[i]; ctx.shadowBlur = 18 + 20 * f + (sm ? 25 : 0);
+    ctx.fillStyle = sm ? '#f4f0ff' : cols[i];
     rr(p.x - PAD_W / 2, y - PAD_H / 2, PAD_W, PAD_H, PAD_H / 2); ctx.fill();
     ctx.shadowBlur = 0; ctx.fillStyle = `rgba(255,255,255,${.35 + .5 * f})`;
     rr(p.x - PAD_W / 2 + 6, y - 2, PAD_W - 12, 4, 2); ctx.fill();
@@ -489,8 +557,6 @@ function drawParts() {
 function drawHUD() {
   if (S.mode === 'demo') return;
   const topI = S.flip ? 1 : 0, botI = 1 - topI;
-  const names = S.mode === 'cpu' ? ['KOMPUTER', 'TY'] : S.mode === 'local' ? ['GRACZ 2', 'GRACZ 1']
-    : (net === 'guest' ? ['TY', 'RYWAL'] : ['RYWAL', 'TY']);
   const x = offX + W * scale - 16 * scale, cy = offY + H * scale / 2;
   const fs = Math.max(28, 72 * scale);
   ctx.textAlign = 'right';
@@ -502,9 +568,6 @@ function drawHUD() {
     ctx.textBaseline = base;
     ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.font = `800 ${fs}px -apple-system,Segoe UI,Roboto,sans-serif`;
     ctx.fillText(String(S.sc[i]), 0, 0);
-    ctx.font = `600 ${Math.max(10, 13 * scale)}px -apple-system,Segoe UI,Roboto,sans-serif`;
-    ctx.fillStyle = 'rgba(255,255,255,.35)';
-    ctx.fillText(names[i], 0, base === 'bottom' ? -fs * .95 : fs * .95);
     ctx.restore();
   };
   const localRot = S.mode === 'local';
@@ -530,6 +593,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 function update(dt) {
+  if (S.paused) return;
   ft += dt;
   if (field.mix < 1) field.mix = Math.min(1, field.mix + dt / 1.4);
   updateBumps(ft);
@@ -565,13 +629,13 @@ function loadPeer() {
 const r1 = v => Math.round(v * 10) / 10;
 function sendState() {
   const b = S.ball;
-  conn.send({ t: 's', b: [r1(b.x), r1(b.y), r1(b.vx), r1(b.vy)], p: [r1(S.pad[0].x), r1(S.pad[1].x)],
+  conn.send({ t: 's', b: [r1(b.x), r1(b.y), r1(b.vx), r1(b.vy)], p: [r1(S.pad[0].x), r1(S.pad[1].x)], sm: Math.round(S.pad[1].sm * 1000) / 1000,
     sc: S.sc, ph: S.phase, st: r1(S.serveT), sd: S.serveDir, ft: Math.round(ft * 1000) / 1000,
     seed: field.seed, os: field.os, mix: Math.round(field.mix * 1000) / 1000 });
 }
 function onGuestState(m) {
   if (S.mode !== 'online') { S.mode = 'online'; S.flip = true; S.pad = [mkPad(), mkPad()];
-    hide('menu'); hide('online'); hide('over'); show('menuBtn'); }
+    hide('menu'); hide('online'); hide('over'); }
   if (m.seed !== field.seed) {
     field.seed = m.seed; field.cur = genField(m.seed);
     field.os = m.os; field.old = m.os ? genField(m.os) : [];
@@ -579,6 +643,8 @@ function onGuestState(m) {
   field.mix = m.mix; ft = m.ft;
   const b = S.ball; b.x = m.b[0]; b.y = m.b[1]; b.vx = m.b[2]; b.vy = m.b[3];
   S.pad[1].tx = m.p[1]; S.pad[1].max = 5000;
+  if (m.sm > 0 && S.pad[1].sm <= 0) sound('whoosh');
+  S.pad[1].sm = m.sm || 0;
   if (m.sc[0] !== S.sc[0] || m.sc[1] !== S.sc[1]) { sound('score'); S.trail = []; }
   S.sc = m.sc.slice(); S.serveT = m.st; S.serveDir = m.sd;
   const prev = S.phase; S.phase = m.ph;
@@ -592,6 +658,8 @@ function wireConn() {
     if (net === 'guest' && m.t === 's') onGuestState(m);
     else if (net === 'host' && m.t === 'p') { S.pad[0].tx = m.x; S.pad[0].max = 2600; }
     else if (net === 'host' && m.t === 'r' && S.phase === 'over') startGame('online');
+    else if (net === 'host' && m.t === 'k') smash(0);
+    else if (m.t === 'pz') setPause(!!m.v, true);
   });
   conn.on('close', () => { if (net) { toast('Drugi gracz się rozłączył'); leaveOnline(); } });
   conn.on('error', () => {});
@@ -672,7 +740,7 @@ $('bOnBack').onclick = () => { leaveOnline(); };
 $('bShare').onclick = async () => {
   const url = location.origin + location.pathname + '?room=' + roomCode;
   try {
-    if (navigator.share) await navigator.share({ title: 'Ballgame', text: 'Zagraj ze mną! Kod: ' + roomCode, url });
+    if (navigator.share) await navigator.share({ title: 'Gravity Ball', text: 'Zagraj ze mną! Kod: ' + roomCode, url });
     else { await navigator.clipboard.writeText(url); toast('Link skopiowany'); }
   } catch (_) {}
 };
@@ -684,7 +752,18 @@ $('bAgain').onclick = () => {
   } else startGame(S.mode);
 };
 $('bOverMenu').onclick = () => { net ? leaveOnline() : toDemo(); };
-$('menuBtn').onclick = () => { net ? leaveOnline() : toDemo(); };
+function setPause(v, fromNet) {
+  if (S.mode === 'demo' || S.paused === v) return;
+  S.paused = v; ptrs.clear();
+  if (v) {
+    const me = myPad();
+    $('pauseScore').textContent = S.mode === 'local' ? `${S.sc[1]} : ${S.sc[0]}` : `${S.sc[me]} : ${S.sc[1 - me]}`;
+    show('pause');
+  } else { hide('pause'); last = performance.now(); }
+  if (net && !fromNet && conn && conn.open) conn.send({ t: 'pz', v });
+}
+$('bResume').onclick = () => setPause(false);
+$('bPauseMenu').onclick = () => { net ? leaveOnline() : toDemo(); };
 
 // start: tryb demo (komputer gra sam ze sobą w tle menu)
 setField(1 + (Math.random() * 2e9 | 0));

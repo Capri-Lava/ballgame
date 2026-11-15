@@ -1,4 +1,6 @@
-# Ballgame
+# Gravity Ball
+
+<img src="icon-512.png" width="128" alt="Gravity Ball">
 
 Gra w odbijanie piłki (jak pong/arkanoid) w **zakrzywionej czasoprzestrzeni**. Tło to siatka z wgnieceniami i wybrzuszeniami, które wpływają na lot piłki:
 
@@ -15,7 +17,9 @@ Kąt odbicia zależy od miejsca trafienia w paletkę (jak w arkanoidzie). Gra to
 
 ## Sterowanie
 - Na telefonie paletka podąża za palcem.
-- Na komputerze sterujesz myszą albo strzałkami ←/→. W trybie dla dwóch graczy górny gracz używa klawiszy A/D.
+- **Mocne odbicie**: szybki ruch palcem w stronę rywala (prostopadle do paletki) wysuwa paletkę do przodu. Jeśli trafi wtedy w piłkę, piłka mocno przyspiesza.
+- **Pauza**: stuknij w środek ekranu (kółko na linii środkowej).
+- Na komputerze sterujesz myszą albo strzałkami ←/→, mocne odbicie to ↑, a pauza to Spacja albo Esc. W trybie dla dwóch graczy górny gracz używa klawiszy A/D, a mocne odbicie to W.
 
 ## Uruchomienie
 Cała gra to jeden plik `index.html` bez zależności. Na GitHub Pages działa od razu. Na iPhonie dodaj stronę do ekranu początkowego, wtedy gra uruchamia się na pełnym ekranie.
