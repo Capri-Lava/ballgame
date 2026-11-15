@@ -40,7 +40,7 @@
   input{font:inherit;font-size:30px;text-align:center;letter-spacing:8px;text-transform:uppercase;width:100%;
     padding:10px;border-radius:14px;border:1px solid rgba(150,170,255,.4);background:rgba(20,20,50,.6);color:#fff}
   #status{min-height:20px;font-size:14px;opacity:.75}
-  .logo{width:96px;height:96px;border-radius:22px;box-shadow:0 0 40px rgba(140,90,255,.45)}
+  #overScore{font-size:45px;font-weight:700;opacity:.85;margin:0 0 14px}
   #toast{position:fixed;z-index:9;left:50%;bottom:calc(env(safe-area-inset-bottom) + 30px);transform:translateX(-50%);
     background:rgba(30,30,70,.9);padding:10px 16px;border-radius:12px;font-size:14px;transition:opacity .4s;pointer-events:none}
 </style>
@@ -49,7 +49,6 @@
 <canvas id="c"></canvas>
 
 <div id="menu" class="ov">
-  <img class="logo" src="icon-192.png" alt="">
   <h1>GRAVITY BALL</h1>
   <p class="sub">piłka w zakrzywionej czasoprzestrzeni</p>
   <div class="grp">
@@ -506,11 +505,6 @@ function drawArena() {
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, H); ctx.moveTo(W, 0); ctx.lineTo(W, H); ctx.stroke();
   ctx.setLineDash([10, 12]); ctx.strokeStyle = 'rgba(200,210,255,.18)';
   ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke(); ctx.setLineDash([]);
-  if (S.mode !== 'demo') {   // środek = przycisk pauzy
-    ctx.strokeStyle = 'rgba(200,210,255,.16)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(W / 2, H / 2, 34, 0, 6.283); ctx.stroke();
-    if (S.phase === 'play') { ctx.fillStyle = 'rgba(200,210,255,.14)'; ctx.fillRect(W / 2 - 8, H / 2 - 9, 5, 18); ctx.fillRect(W / 2 + 3, H / 2 - 9, 5, 18); }
-  }
 }
 function drawPads() {
   const cols = ['#ff7ae0', '#7ee8ff'];
@@ -721,9 +715,9 @@ function showOnline(kind) {
 function showOver() {
   const w = S.sc[0] >= WIN ? 0 : 1;
   let t;
-  if (S.mode === 'cpu') t = w === 1 ? 'Wygrałeś! 🎉' : 'Komputer wygrywa';
+  if (S.mode === 'cpu') t = w === 1 ? 'Wygrałeś!' : 'Komputer wygrywa';
   else if (S.mode === 'local') t = `Wygrywa Gracz ${w === 1 ? 1 : 2}`;
-  else t = w === myPad() ? 'Wygrałeś! 🎉' : 'Rywal wygrywa';
+  else t = w === myPad() ? 'Wygrałeś!' : 'Rywal wygrywa';
   $('overTxt').textContent = t;
   const me = myPad();
   $('overScore').textContent = S.mode === 'local' ? `${S.sc[1]} : ${S.sc[0]}` : `${S.sc[me]} : ${S.sc[1 - me]}`;

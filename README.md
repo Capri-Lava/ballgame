@@ -18,7 +18,7 @@ Kąt odbicia zależy od miejsca trafienia w paletkę (jak w arkanoidzie). Gra to
 ## Sterowanie
 - Na telefonie paletka podąża za palcem.
 - **Mocne odbicie**: szybki ruch palcem w stronę rywala (prostopadle do paletki) wysuwa paletkę do przodu. Jeśli trafi wtedy w piłkę, piłka mocno przyspiesza.
-- **Pauza**: stuknij w środek ekranu (kółko na linii środkowej).
+- **Pauza**: stuknij w środek ekranu (na linii środkowej).
 - Na komputerze sterujesz myszą albo strzałkami ←/→, mocne odbicie to ↑, a pauza to Spacja albo Esc. W trybie dla dwóch graczy górny gracz używa klawiszy A/D, a mocne odbicie to W.
 
 ## Uruchomienie
