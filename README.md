@@ -13,7 +13,7 @@ Kąt odbicia zależy od miejsca trafienia w paletkę (jak w arkanoidzie). Gra to
 ## Tryby
 - **Gra z komputerem**: łatwy, średni, trudny (trudny komputer przewiduje lot po zakrzywionym polu).
 - **Na jednym telefonie**: każdy gracz steruje palcem na swojej połowie ekranu.
-- **Online**: jeden gracz tworzy pokój i wysyła link albo 4-znakowy kod, drugi dołącza. Telefony łączą się bezpośrednio (WebRTC przez [PeerJS](https://peerjs.com)), więc serwer nie jest potrzebny.
+- **Online**: jeden gracz tworzy pokój i wysyła link albo 4-cyfrowy kod, drugi dołącza. Telefony łączą się przez publiczne serwery MQTT (trzy naraz, gdy jeden nie działa, gra idzie przez pozostałe), więc gra działa i w wifi, i w sieci komórkowej. Po chwilowym zerwaniu (zgaszony ekran, słaby zasięg) gra czeka i sama wznawia się od miejsca przerwania. Po meczu przycisk **Następna gra** zaczyna kolejny bez ponownego łączenia.
 
 ## Sterowanie
 - Na telefonie paletka podąża za palcem.
